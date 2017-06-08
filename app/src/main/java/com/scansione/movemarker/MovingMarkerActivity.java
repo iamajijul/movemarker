@@ -161,11 +161,11 @@ public class MovingMarkerActivity extends AppCompatActivity implements OnMapRead
                     .icon(BitmapDescriptorFactory.fromBitmap(smallMarker))
                     .title("Car")
                     .snippet("Yo"));
-
+            trackingMarker.setRotation(-previousBearing > 180 ? previousBearing / 2 : previousBearing);
             CameraPosition cameraPosition =
                     new CameraPosition.Builder()
                             .target(markerPos)
-                            .bearing(previousBearing)
+                           // .bearing(previousBearing)
                             .tilt(tilt)
                             .zoom(mGoogleMap.getCameraPosition().zoom >= 17 ? mGoogleMap.getCameraPosition().zoom : 17)
                             .build();
@@ -213,8 +213,14 @@ public class MovingMarkerActivity extends AppCompatActivity implements OnMapRead
             double lng = t * endLatLng.longitude + (1 - t) * beginLatLng.longitude;
             LatLng newPosition = new LatLng(lat, lng);
 
-            trackingMarker.setPosition(newPosition);
+            LatLng begin = getBeginLatLng();
+            LatLng end = getEndLatLng();
 
+            float bearingL = bearingBetweenLatLngs(begin, end);
+            float rot = (float) (t * bearingL + (1 - t) * previousBearing);
+            previousBearing = bearingL;
+            trackingMarker.setRotation(-rot > 180 ? rot / 2 : rot);
+            trackingMarker.setPosition(newPosition);
 
             if (t < 1) {
                 mHandler.postDelayed(this, 16);
@@ -231,20 +237,12 @@ public class MovingMarkerActivity extends AppCompatActivity implements OnMapRead
 
                     start = SystemClock.uptimeMillis();
 
-                    LatLng begin = getBeginLatLng();
-                    LatLng end = getEndLatLng();
 
-                    float bearingL = bearingBetweenLatLngs(begin, end);
-                   /* float rot = (float) (t * bearingL + (1 - t) * previousBearing);
-                    Log.e("$$", "P : " + previousBearing + " , Current :" + bearingL + ", Rotate : " + rot);
-
-                    previousBearing = bearingL;
-                    trackingMarker.setRotation(-rot > 180 ? rot / 2 : 0);
-*/
                     CameraPosition cameraPosition =
                             new CameraPosition.Builder()
                                     .target(end) // changed this...
-                                    .bearing(bearingL)
+                                  //  .bearing(bearingL)  //Open to see bearing on map but you have
+                                                          // to stop rotation of marker
                                     .tilt(tilt)
                                     .zoom(mGoogleMap.getCameraPosition().zoom)
                                     .build();
