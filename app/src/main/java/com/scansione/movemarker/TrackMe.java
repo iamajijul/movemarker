@@ -12,6 +12,7 @@ import android.os.Handler;
 import android.os.SystemClock;
 import android.support.design.widget.BottomSheetBehavior;
 import android.support.v4.app.ActivityCompat;
+import android.support.v4.content.ContextCompat;
 import android.support.v7.app.AppCompatActivity;
 import android.util.Log;
 import android.view.Menu;
@@ -29,6 +30,8 @@ import com.google.android.gms.common.ConnectionResult;
 import com.google.android.gms.common.api.GoogleApiClient;
 import com.google.android.gms.common.api.PendingResult;
 import com.google.android.gms.common.api.ResultCallback;
+import com.google.android.gms.location.LocationListener;
+import com.google.android.gms.location.LocationRequest;
 import com.google.android.gms.location.LocationServices;
 import com.google.android.gms.location.places.AutocompletePrediction;
 import com.google.android.gms.location.places.Place;
@@ -40,7 +43,6 @@ import com.google.android.gms.maps.GoogleMap;
 import com.google.android.gms.maps.MapsInitializer;
 import com.google.android.gms.maps.OnMapReadyCallback;
 import com.google.android.gms.maps.SupportMapFragment;
-import com.google.android.gms.maps.model.BitmapDescriptor;
 import com.google.android.gms.maps.model.BitmapDescriptorFactory;
 import com.google.android.gms.maps.model.CameraPosition;
 import com.google.android.gms.maps.model.LatLng;
@@ -53,44 +55,37 @@ import java.util.List;
 /**
  * Created by Ajijul
  */
-public class MovingMarkerActivity extends AppCompatActivity implements OnMapReadyCallback, GoogleApiClient.OnConnectionFailedListener, GoogleApiClient.ConnectionCallbacks {
+public class TrackMe extends AppCompatActivity implements OnMapReadyCallback,
+        GoogleApiClient.OnConnectionFailedListener,
+        GoogleApiClient.ConnectionCallbacks, LocationListener {
 
     protected LatLng source;// = new LatLng(22.642388, 88.440017);
     protected LatLng end;// = new LatLng(22.585975, 88.340454);
-    private ProgressDialog progressDialog;
     private static final String LOG_TAG = "MovingMarkerActivity";
     protected GoogleApiClient mGoogleApiClient;
-    private List<LatLng> latLngs = new ArrayList<LatLng>();
     private GoogleMap mGoogleMap;
     private final Handler mHandler = new Handler();
-    private AutoCompleteTextView actv_source, actv_destination;
     private PlaceAutocompleteAdapter mAdapter;
-    private ImageView iv_navigate;
     private BottomSheetBehavior<View> mBottomSheetBehavior2;
+    private Animator animator = new Animator();
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_moving_marker);
-        actv_source = (AutoCompleteTextView) findViewById(R.id.actv_source);
-        actv_destination = (AutoCompleteTextView) findViewById(R.id.actv_destination);
-        iv_navigate = (ImageView) findViewById(R.id.iv_navigate);
+        findViewById(R.id.ll).setVisibility(View.GONE);
         getSupportActionBar().setDisplayShowHomeEnabled(true);
         getSupportActionBar().setTitle("Track Me");
-
         mGoogleApiClient = new GoogleApiClient.Builder(this)
-                .addApi(Places.GEO_DATA_API)
                 .addApi(LocationServices.API)
                 .addConnectionCallbacks(this)
                 .addOnConnectionFailedListener(this)
                 .build();
         MapsInitializer.initialize(this);
         mGoogleApiClient.connect();
-
         mAdapter = new PlaceAutocompleteAdapter(this,
                 mGoogleApiClient, null, null);
-        actv_source.setAdapter(mAdapter);
-        actv_destination.setAdapter(mAdapter);
+
         SupportMapFragment mapFragment = (SupportMapFragment) getSupportFragmentManager()
                 .findFragmentById(R.id.map);
         mapFragment.getMapAsync(this);
@@ -100,117 +95,8 @@ public class MovingMarkerActivity extends AppCompatActivity implements OnMapRead
             return;
         }
 
-        /*
-        * Sets the start and destination points based on the values selected
-        * from the autocomplete text views.
-        * */
 
-        actv_source.setOnItemClickListener(new AdapterView.OnItemClickListener() {
-            @Override
-            public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
-
-                final AutocompletePrediction item = mAdapter.getItem(position);
-                final String placeId = String.valueOf(item.getPlaceId());
-
-            /*
-             Issue a request to the Places Geo Data API to retrieve a Place object with additional
-              details about the place.
-              */
-                PendingResult<PlaceBuffer> placeResult = Places.GeoDataApi
-                        .getPlaceById(mGoogleApiClient, placeId);
-                placeResult.setResultCallback(new ResultCallback<PlaceBuffer>() {
-                    @Override
-                    public void onResult(PlaceBuffer places) {
-                        if (!places.getStatus().isSuccess()) {
-                            // Request did not complete successfully
-                            Log.e(LOG_TAG, "Place query did not complete. Error: " + places.getStatus().toString());
-                            places.release();
-                            return;
-                        }
-                        // Get the Place object from the buffer.
-                        final Place place = places.get(0);
-
-                        source = place.getLatLng();
-                    }
-                });
-
-            }
-        });
-        actv_destination.setOnItemClickListener(new AdapterView.OnItemClickListener() {
-            @Override
-            public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
-
-                final AutocompletePrediction item = mAdapter.getItem(position);
-                final String placeId = String.valueOf(item.getPlaceId());
-            /*
-             Issue a request to the Places Geo Data API to retrieve a Place object with additional
-              details about the place.
-              */
-                PendingResult<PlaceBuffer> placeResult = Places.GeoDataApi
-                        .getPlaceById(mGoogleApiClient, placeId);
-                placeResult.setResultCallback(new ResultCallback<PlaceBuffer>() {
-                    @Override
-                    public void onResult(PlaceBuffer places) {
-                        if (!places.getStatus().isSuccess()) {
-                            // Request did not complete successfully
-                            Log.e(LOG_TAG, "Place query did not complete. Error: " + places.getStatus().toString());
-                            places.release();
-                            return;
-                        }
-                        // Get the Place object from the buffer.
-                        final Place place = places.get(0);
-                        end = place.getLatLng();
-                    }
-                });
-
-            }
-        });
-        iv_navigate.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                generateRootAndStartNavigate();
-            }
-        });
     }
-
-    private void generateRootAndStartNavigate() {
-        if (source == null || end == null) {
-            if (source == null) {
-                if (actv_source.getText().length() > 0) {
-                    actv_source.setError("Choose location from dropdown.");
-                } else {
-                    Toast.makeText(this, "Please choose a starting point.", Toast.LENGTH_SHORT).show();
-                }
-            }
-            if (end == null) {
-                if (actv_source.getText().length() > 0) {
-                    actv_source.setError("Choose location from dropdown.");
-                } else {
-                    Toast.makeText(this, "Please choose a destination.", Toast.LENGTH_SHORT).show();
-                }
-            }
-        } else {
-            progressDialog = ProgressDialog.show(this, "Please wait.",
-                    "Fetching route information.", true);
-            CameraUpdate center = CameraUpdateFactory.newLatLng(source);
-            CameraUpdate zoom = CameraUpdateFactory.zoomTo(17);
-            mGoogleMap.moveCamera(center);
-            mGoogleMap.animateCamera(zoom);
-            new GetDirectionOnMap(mGoogleMap, source, end) {
-                @Override
-                protected void onPostExecute(List<LatLng> latLngs) {
-                    super.onPostExecute(latLngs);
-                    progressDialog.dismiss();
-                    MovingMarkerActivity.this.latLngs = new ArrayList<LatLng>(latLngs);
-                    animator.startAnimation();
-                }
-            }.execute();
-
-            hideKeyboard();
-        }
-    }
-
-    private Animator animator = new Animator();
 
 
     @Override
@@ -224,9 +110,46 @@ public class MovingMarkerActivity extends AppCompatActivity implements OnMapRead
         }
         mGoogleMap.setMyLocationEnabled(true);
 
+    }
+
+    @Override
+    public void onLocationChanged(Location location) {
+        Log.e("$$", "*****onLocationChanged***********");
+
+        end = source;
+        source = new LatLng(location.getLatitude(), location.getLongitude());
+        if (source != null && end != null)
+            animator.setupCameraPositionForMovement(source, end);
+        if (end != null
+                && distance(source.latitude, source.longitude, end.latitude, end.longitude) > .007) {
+            Log.e("$$", "*****Distance More than one ,mile***********");
+            animator.startAnimation();
+        }
 
     }
 
+    /**
+     * calculates the distance between two locations in MILES
+     */
+    private double distance(double lat1, double lng1, double lat2, double lng2) {
+
+        double earthRadius = 3958.75; // in miles, change to 6371 for kilometer output
+
+        double dLat = Math.toRadians(lat2 - lat1);
+        double dLng = Math.toRadians(lng2 - lng1);
+
+        double sindLat = Math.sin(dLat / 2);
+        double sindLng = Math.sin(dLng / 2);
+
+        double a = Math.pow(sindLat, 2) + Math.pow(sindLng, 2)
+                * Math.cos(Math.toRadians(lat1)) * Math.cos(Math.toRadians(lat2));
+
+        double c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+        double dist = earthRadius * c;
+
+        return dist; // output distance, in MILES
+    }
 
     public class Animator implements Runnable {
 
@@ -234,7 +157,6 @@ public class MovingMarkerActivity extends AppCompatActivity implements OnMapRead
         private static final int ANIMATE_SPEEED_TURN = 500;
 
         private final Interpolator interpolator = new LinearInterpolator();
-        int currentIndex = 0;
         float tilt = 0;
 
         long start = SystemClock.uptimeMillis();
@@ -247,7 +169,6 @@ public class MovingMarkerActivity extends AppCompatActivity implements OnMapRead
         public void reset() {
             //resetMarkers();
             start = SystemClock.uptimeMillis();
-            currentIndex = 0;
             endLatLng = getEndLatLng();
             beginLatLng = getBeginLatLng();
 
@@ -261,17 +182,15 @@ public class MovingMarkerActivity extends AppCompatActivity implements OnMapRead
 
         public void initialize() {
             reset();
-            // We first need to put the camera in the correct position for the first run (we need 2 markers for this).....
-            LatLng markerPos = latLngs.get(0);
-            LatLng secondPos = latLngs.get(1);
-
-            setupCameraPositionForMovement(markerPos, secondPos);
+            new Handler().post(animator);
 
         }
 
         private void setupCameraPositionForMovement(LatLng markerPos,
                                                     LatLng secondPos) {
-
+            Log.e("$$", source + "*****setupCameraPositionForMovement***********" + end);
+            if (trackingMarker != null)
+                return;
             previousBearing = bearingBetweenLatLngs(markerPos, secondPos);
 
             int height = 70;
@@ -283,7 +202,7 @@ public class MovingMarkerActivity extends AppCompatActivity implements OnMapRead
             trackingMarker = mGoogleMap.addMarker(new MarkerOptions().position(markerPos)
                     .icon(BitmapDescriptorFactory.fromBitmap(smallMarker))
                     .title("Car")
-                    .snippet("Yo"));
+                    .snippet("Yooo"));
             trackingMarker.setRotation(-previousBearing > 180 ? previousBearing / 2 : previousBearing);
             CameraPosition cameraPosition =
                     new CameraPosition.Builder()
@@ -319,15 +238,13 @@ public class MovingMarkerActivity extends AppCompatActivity implements OnMapRead
         }
 
         public void startAnimation() {
-            if (latLngs.size() > 1) {
-                animator.initialize();
-            }
+            animator.initialize();
+
         }
 
 
         @Override
         public void run() {
-
             long elapsed = SystemClock.uptimeMillis() - start;
             double t = interpolator.getInterpolation((float) elapsed / ANIMATE_SPEEED);
 
@@ -336,65 +253,48 @@ public class MovingMarkerActivity extends AppCompatActivity implements OnMapRead
             double lng = t * endLatLng.longitude + (1 - t) * beginLatLng.longitude;
             LatLng newPosition = new LatLng(lat, lng);
 
-            LatLng begin = getBeginLatLng();
-            LatLng end = getEndLatLng();
 
-            float bearingL = bearingBetweenLatLngs(begin, end);
+            float bearingL = bearingBetweenLatLngs(beginLatLng, endLatLng);
             float rot = (float) (t * bearingL + (1 - t) * previousBearing);
             previousBearing = bearingL;
             trackingMarker.setRotation(-rot > 180 ? rot / 2 : rot);
             trackingMarker.setPosition(newPosition);
 
             if (t < 1) {
+                Log.e("$$", source + "*******t < 1*********" + end);
+
                 mHandler.postDelayed(this, 16);
             } else {
-
-                System.out.println("Move to next marker.... current = " + currentIndex + " and size = " + latLngs.size());
-                if (currentIndex < latLngs.size() - 2) {
-
-                    currentIndex++;
-
-                    endLatLng = getEndLatLng();
-                    beginLatLng = getBeginLatLng();
-
-
-                    start = SystemClock.uptimeMillis();
+                Log.e("$$", source + "*******t < 1 else {*********" + end);
+                CameraPosition cameraPosition =
+                        new CameraPosition.Builder()
+                                .target(end) // changed this...
+                                //  .bearing(bearingL)  //Open to see bearing on map but you have
+                                // to stop rotation of marker
+                                .tilt(tilt)
+                                .zoom(mGoogleMap.getCameraPosition().zoom)
+                                .build();
 
 
-                    CameraPosition cameraPosition =
-                            new CameraPosition.Builder()
-                                    .target(end) // changed this...
-                                    //  .bearing(bearingL)  //Open to see bearing on map but you have
-                                    // to stop rotation of marker
-                                    .tilt(tilt)
-                                    .zoom(mGoogleMap.getCameraPosition().zoom)
-                                    .build();
+                mGoogleMap.animateCamera(
+                        CameraUpdateFactory.newCameraPosition(cameraPosition),
+                        ANIMATE_SPEEED_TURN,
+                        null
+                );
 
+                // mHandler.postDelayed(this, 16);
 
-                    mGoogleMap.animateCamera(
-                            CameraUpdateFactory.newCameraPosition(cameraPosition),
-                            ANIMATE_SPEEED_TURN,
-                            null
-                    );
-
-                    start = SystemClock.uptimeMillis();
-                    mHandler.postDelayed(animator, 16);
-
-                } else {
-                    currentIndex++;
-                    //    stopAnimation();
-                }
 
             }
         }
 
 
         private LatLng getEndLatLng() {
-            return latLngs.get(currentIndex + 1);
+            return end;
         }
 
         private LatLng getBeginLatLng() {
-            return latLngs.get(currentIndex);
+            return source;
         }
 
     }
@@ -423,6 +323,16 @@ public class MovingMarkerActivity extends AppCompatActivity implements OnMapRead
 
     @Override
     public void onConnected(Bundle bundle) {
+        Log.e("$$", "onConnected");
+        LocationRequest mLocationRequest = new LocationRequest();
+        mLocationRequest.setInterval(1000);
+        mLocationRequest.setFastestInterval(1000);
+        mLocationRequest.setPriority(LocationRequest.PRIORITY_BALANCED_POWER_ACCURACY);
+        if (ContextCompat.checkSelfPermission(this,
+                Manifest.permission.ACCESS_FINE_LOCATION)
+                == PackageManager.PERMISSION_GRANTED) {
+            LocationServices.FusedLocationApi.requestLocationUpdates(mGoogleApiClient, mLocationRequest, this);
+        }
     }
 
     @Override
